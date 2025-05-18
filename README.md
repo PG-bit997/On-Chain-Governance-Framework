@@ -1,4 +1,5 @@
-#On-Chain Governance Framework
+##On-Chain Governance Framework
+
 Project Description
 The On-Chain Governance Framework is a comprehensive decentralized governance system built on Ethereum blockchain. It enables token holders to participate in democratic decision-making processes through proposal creation, voting, and automated execution of successful proposals. The framework ensures transparent, immutable, and fair governance for decentralized autonomous organizations (DAOs) and other blockchain-based communities.
 Project Vision
