@@ -20,11 +20,14 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     Counters.Counter private _proposalIds;
 
     // Governance parameters
-    uint256 public votingDelay = 1 days;      // Delay before voting starts
-    uint256 public votingPeriod = 3 days;    // Duration of voting period
+    uint256 public votingDelay = 1 days;         // Delay before voting starts
+    uint256 public votingPeriod = 3 days;        // Duration of voting period
     uint256 public proposalThreshold = 1000 * 10**18; // Minimum tokens to create proposal
-    uint256 public quorumPercentage = 10;    // Minimum percentage of total supply needed
-    uint256 public executionDelay = 1 days;  // Delay before execution
+    uint256 public quorumPercentage = 10;        // Minimum percentage of total supply needed
+    uint256 public executionDelay = 1 days;      // Delay before execution
+
+    // Emergency pause flag
+    bool public paused;
 
     // Proposal states
     enum ProposalState {
@@ -32,6 +35,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         Active,
         Defeated,
         Succeeded,
+        Queued,
         Executed,
         Cancelled
     }
@@ -63,7 +67,11 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     // Mappings
     mapping(uint256 => Proposal) public proposals;
     mapping(uint256 => mapping(address => Vote)) public proposalVotes;
-    mapping(address => uint256) public votingPower;
+    mapping(uint256 => bool) public queuedProposals;
+
+    // Delegation mappings
+    mapping(address => address) public delegates;
+    mapping(address => uint256) public delegatedVotes;
     
     // Events
     event ProposalCreated(
@@ -80,9 +88,19 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         uint8 support,
         uint256 votes
     );
-    
+
+    event ProposalQueued(uint256 indexed proposalId);
     event ProposalExecuted(uint256 indexed proposalId);
     event ProposalCancelled(uint256 indexed proposalId);
+    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
+    event Paused();
+    event Unpaused();
+
+    // Modifiers
+    modifier whenNotPaused() {
+        require(!paused, "Contract is paused");
+        _;
+    }
 
     /**
      * @dev Constructor
@@ -93,17 +111,29 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Core Function 1: Create a new governance proposal
-     * @param description Description of the proposal
-     * @param target Target contract address for execution
-     * @param callData Encoded function call data
-     * @return proposalId The ID of the created proposal
+     * @dev Emergency pause contract operations
+     */
+    function pause() external onlyOwner {
+        paused = true;
+        emit Paused();
+    }
+
+    /**
+     * @dev Unpause contract operations
+     */
+    function unpause() external onlyOwner {
+        paused = false;
+        emit Unpaused();
+    }
+
+    /**
+     * @dev Create a new governance proposal
      */
     function createProposal(
         string memory description,
         address target,
         bytes memory callData
-    ) external nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         require(
             governanceToken.balanceOf(msg.sender) >= proposalThreshold,
             "Insufficient tokens to create proposal"
@@ -121,7 +151,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
             description: description,
             startTime: startTime,
             endTime: endTime,
-            executionTime: endTime + executionDelay,
+            executionTime: 0,
             forVotes: 0,
             againstVotes: 0,
             abstainVotes: 0,
@@ -136,11 +166,9 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Core Function 2: Cast a vote on a proposal
-     * @param proposalId The ID of the proposal
-     * @param support The vote direction (0=against, 1=for, 2=abstain)
+     * @dev Cast a vote on a proposal
      */
-    function castVote(uint256 proposalId, uint8 support) external nonReentrant {
+    function castVote(uint256 proposalId, uint8 support) external nonReentrant whenNotPaused {
         require(support <= 2, "Invalid vote type");
         require(getProposalState(proposalId) == ProposalState.Active, "Voting is not active");
         require(!proposalVotes[proposalId][msg.sender].hasVoted, "Already voted");
@@ -148,14 +176,12 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         uint256 votes = getVotingPower(msg.sender);
         require(votes > 0, "No voting power");
 
-        // Record the vote
         proposalVotes[proposalId][msg.sender] = Vote({
             hasVoted: true,
             support: support,
             votes: votes
         });
 
-        // Update proposal vote tallies
         Proposal storage proposal = proposals[proposalId];
         if (support == 0) {
             proposal.againstVotes += votes;
@@ -169,19 +195,35 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Core Function 3: Execute a successful proposal
-     * @param proposalId The ID of the proposal to execute
+     * @dev Queue a proposal for execution after success
      */
-    function executeProposal(uint256 proposalId) external nonReentrant {
+    function queueProposal(uint256 proposalId) external whenNotPaused {
+        require(getProposalState(proposalId) == ProposalState.Succeeded, "Proposal not succeeded");
+        Proposal storage proposal = proposals[proposalId];
+        require(!queuedProposals[proposalId], "Already queued");
+        require(!proposal.executed, "Already executed");
+        require(!proposal.cancelled, "Proposal cancelled");
+
+        queuedProposals[proposalId] = true;
+        proposal.executionTime = block.timestamp + executionDelay;
+
+        emit ProposalQueued(proposalId);
+    }
+
+    /**
+     * @dev Execute a successful proposal after queue and delay
+     */
+    function executeProposal(uint256 proposalId) external nonReentrant whenNotPaused {
+        require(queuedProposals[proposalId], "Proposal not queued");
         require(getProposalState(proposalId) == ProposalState.Succeeded, "Proposal not ready for execution");
-        
+
         Proposal storage proposal = proposals[proposalId];
         require(block.timestamp >= proposal.executionTime, "Execution delay not met");
         require(!proposal.executed, "Proposal already executed");
 
         proposal.executed = true;
+        queuedProposals[proposalId] = false;
 
-        // Execute the proposal call
         if (proposal.target != address(0) && proposal.callData.length > 0) {
             (bool success, ) = proposal.target.call(proposal.callData);
             require(success, "Proposal execution failed");
@@ -191,34 +233,55 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @dev Cancel a proposal
+     */
+    function cancelProposal(uint256 proposalId) external whenNotPaused {
+        Proposal storage proposal = proposals[proposalId];
+        require(
+            msg.sender == proposal.proposer || msg.sender == owner(),
+            "Only proposer or owner can cancel"
+        );
+        require(!proposal.executed, "Cannot cancel executed proposal");
+        require(!proposal.cancelled, "Proposal already cancelled");
+
+        proposal.cancelled = true;
+        if (queuedProposals[proposalId]) {
+            queuedProposals[proposalId] = false;
+        }
+
+        emit ProposalCancelled(proposalId);
+    }
+
+    /**
      * @dev Get the current state of a proposal
-     * @param proposalId The ID of the proposal
-     * @return The current state of the proposal
      */
     function getProposalState(uint256 proposalId) public view returns (ProposalState) {
         Proposal storage proposal = proposals[proposalId];
-        
+
         if (proposal.cancelled) {
             return ProposalState.Cancelled;
         }
-        
+
         if (proposal.executed) {
             return ProposalState.Executed;
         }
-        
+
+        if (queuedProposals[proposalId]) {
+            return ProposalState.Queued;
+        }
+
         if (block.timestamp < proposal.startTime) {
             return ProposalState.Pending;
         }
-        
+
         if (block.timestamp <= proposal.endTime) {
             return ProposalState.Active;
         }
-        
-        // Check if proposal succeeded
+
         uint256 totalSupply = governanceToken.totalSupply();
         uint256 quorum = (totalSupply * quorumPercentage) / 100;
         uint256 totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
-        
+
         if (totalVotes >= quorum && proposal.forVotes > proposal.againstVotes) {
             return ProposalState.Succeeded;
         } else {
@@ -227,65 +290,70 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Get voting power of an address
-     * @param account The address to check
-     * @return The voting power (token balance)
+     * @dev Get voting power of an address including delegated votes
      */
     function getVotingPower(address account) public view returns (uint256) {
-        return governanceToken.balanceOf(account);
+        return governanceToken.balanceOf(account) + delegatedVotes[account];
     }
 
     /**
-     * @dev Get proposal details
-     * @param proposalId The ID of the proposal
-     * @return Proposal structure
+     * @dev Delegate voting power to another address
      */
-    function getProposal(uint256 proposalId) external view returns (Proposal memory) {
-        return proposals[proposalId];
+    function delegate(address delegatee) external whenNotPaused {
+        address currentDelegate = delegates[msg.sender];
+        uint256 delegatorBalance = governanceToken.balanceOf(msg.sender);
+
+        delegates[msg.sender] = delegatee;
+
+        if (currentDelegate != address(0)) {
+            delegatedVotes[currentDelegate] -= delegatorBalance;
+        }
+        delegatedVotes[delegatee] += delegatorBalance;
+
+        emit DelegateChanged(msg.sender, currentDelegate, delegatee);
     }
 
     /**
-     * @dev Get the total number of proposals
-     * @return The total count of proposals
+     * @dev Get votes breakdown for a proposal
      */
-    function getProposalCount() external view returns (uint256) {
-        return _proposalIds.current();
-    }
-
-    /**
-     * @dev Update governance parameters (only owner)
-     * @param _votingDelay New voting delay
-     * @param _votingPeriod New voting period
-     * @param _proposalThreshold New proposal threshold
-     * @param _quorumPercentage New quorum percentage
-     */
-    function updateGovernanceParameters(
-        uint256 _votingDelay,
-        uint256 _votingPeriod,
-        uint256 _proposalThreshold,
-        uint256 _quorumPercentage
-    ) external onlyOwner {
-        require(_quorumPercentage <= 100, "Quorum percentage cannot exceed 100");
-        
-        votingDelay = _votingDelay;
-        votingPeriod = _votingPeriod;
-        proposalThreshold = _proposalThreshold;
-        quorumPercentage = _quorumPercentage;
-    }
-
-    /**
-     * @dev Cancel a proposal (only proposer or owner)
-     * @param proposalId The ID of the proposal to cancel
-     */
-    function cancelProposal(uint256 proposalId) external {
+    function getProposalVotes(uint256 proposalId) external view returns (uint256 forVotes, uint256 againstVotes, uint256 abstainVotes) {
         Proposal storage proposal = proposals[proposalId];
-        require(
-            msg.sender == proposal.proposer || msg.sender == owner(),
-            "Only proposer or owner can cancel"
-        );
-        require(!proposal.executed, "Cannot cancel executed proposal");
-        
-        proposal.cancelled = true;
-        emit ProposalCancelled(proposalId);
+        return (proposal.forVotes, proposal.againstVotes, proposal.abstainVotes);
+    }
+
+    /**
+     * @dev Update execution delay (only owner)
+     */
+    function updateExecutionDelay(uint256 _executionDelay) external onlyOwner {
+        executionDelay = _executionDelay;
+    }
+
+    /**
+     * @dev Update voting delay (only owner)
+     */
+    function updateVotingDelay(uint256 _votingDelay) external onlyOwner {
+        votingDelay = _votingDelay;
+    }
+
+    /**
+     * @dev Update voting period (only owner)
+     */
+    function updateVotingPeriod(uint256 _votingPeriod) external onlyOwner {
+        votingPeriod = _votingPeriod;
+    }
+
+    /**
+     * @dev Update proposal threshold (only owner)
+     */
+    function updateProposalThreshold(uint256 _proposalThreshold) external onlyOwner {
+        proposalThreshold = _proposalThreshold;
+    }
+
+    /**
+     * @dev Update quorum percentage (only owner)
+     */
+    function updateQuorumPercentage(uint256 _quorumPercentage) external onlyOwner {
+        require(_quorumPercentage <= 100, "Invalid quorum percentage");
+        quorumPercentage = _quorumPercentage;
     }
 }
