@@ -47,11 +47,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         uint256 votes;
     }
 
-    mapping(uint256 => Proposal) public proposals;
-    mapping(uint256 => mapping(address => Vote)) public proposalVotes;
-    mapping(uint256 => bool) public queuedProposals;
-    mapping(address => address) public delegates;
-    mapping(address => uint256) public delegatedVotes;
+    
 
     event ProposalCreated(uint256 indexed proposalId, string title, address indexed proposer, uint256 startTime, uint256 endTime);
     event VoteCast(address indexed voter, uint256 indexed proposalId, uint8 support, uint256 votes);
