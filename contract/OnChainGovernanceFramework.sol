@@ -131,11 +131,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         else proposal.abstainVotes += votes;
 
         emit VoteCast(msg.sender, proposalId, support, votes);
-    }
 
-    function queueProposal(uint256 proposalId) external whenNotPaused {
-        require(getProposalState(proposalId) == ProposalState.Succeeded, "Proposal not succeeded");
-        Proposal storage proposal = proposals[proposalId];
 
         require(!queuedProposals[proposalId], "Already queued");
         require(!proposal.executed && !proposal.cancelled, "Cannot queue");
