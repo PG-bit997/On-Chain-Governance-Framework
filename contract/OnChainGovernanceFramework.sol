@@ -20,8 +20,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     uint256 public quorumPercentage = 10;
     uint256 public executionDelay = 1 days;
 
-    bool public paused;
-
+    bool public paused
     enum ProposalState { Pending, Active, Defeated, Succeeded, Queued, Executed, Cancelled }
 
     struct Proposal {
