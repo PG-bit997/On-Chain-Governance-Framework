@@ -10,9 +10,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     using Counters for Counters.Counter;
 
     IERC20 public governanceToken;
-    bool public tokenLocked = false;
-
-    Counters.Counter private
+    bool public tokenLocked = false    Counters.Counter private
 
     uint256 public votingDelay = 1 days;
     uint256 public votingPeriod = 3 days;
