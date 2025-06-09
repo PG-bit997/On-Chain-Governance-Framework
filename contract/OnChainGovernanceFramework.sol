@@ -10,7 +10,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     using Counters for Counters.Counter;
 
     IERC20 public governanceToken;
-    bool public tokenLocked = false;
+    bool public tokenLocked = fals
 
     Counters.Counter private _proposalIds;
 
