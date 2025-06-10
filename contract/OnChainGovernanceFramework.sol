@@ -7,8 +7,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
-    using Counters for Counters.Counter;
-
+    using Counters for Counters.Counter
     IERC20 public governanceToken;
     bool public tokenLocked = fals
 
