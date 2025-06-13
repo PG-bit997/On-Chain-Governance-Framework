@@ -18,8 +18,13 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     uint256 public proposalThreshold;
     uint256 public quorumPercentage = 10;
     uint256 public executionDelay = 1 days;
-
     bool public paused;
+
+    uint256 public votingDelay = 1 days;
+    uint256 public votingPeriod = 3 days;
+    uint256 public proposalThreshold;
+    uint256 public quorumPercentage = 10;
+    uint256 public executionDelay = 1 days;
 
     enum ProposalState { Pending, Active, Defeated, Succeeded, Queued, Executed, Cancelled }
 
