@@ -13,13 +13,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
 
     Counters.Counter private
 
-    uint256 public votingDelay = 1 days;
-    uint256 public votingPeriod = 3 days;
-    uint256 public proposalThreshold;
-    uint256 public quorumPercentage = 10;
-    uint256 public executionDelay = 1 days;
-    bool public paused;
-
+    
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
