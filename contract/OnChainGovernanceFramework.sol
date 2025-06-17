@@ -11,8 +11,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     IERC20 public governanceToken;
     bool public tokenLocked = fals
 
-    Counters.Counter private
-\\\\
+    Counters.Counter privat
     
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
