@@ -46,13 +46,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         string description;
         uint256 startTime;
         uint256 endTime;
-        uint256 executionTime;
-        uint256 forVotes;
-        uint256 againstVotes;
-        uint256 abstainVotes;
-        bool executed;
-        bool cancelled;
-        bytes callData;
+       
         address target;
         mapping(address => Vote) votesByVoter;
         uint256 snapshotTotalSupply;
