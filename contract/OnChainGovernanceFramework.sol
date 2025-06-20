@@ -80,11 +80,6 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor(address _governanceToken, uint256 _proposalThreshold) {
-        governanceToken = IERC20(_governanceToken);
-        tokenLocked = true; // Locking after initial setup
-        proposalThreshold = _proposalThreshold;
-    }
 
     // Pause/unpause functions
     function pause() external onlyOwner {
