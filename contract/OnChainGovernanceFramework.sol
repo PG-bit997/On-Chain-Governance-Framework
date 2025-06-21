@@ -101,9 +101,7 @@ contract OnChainGovernanceFramework is Ownable, ReentrancyGuard {
     ) external nonReentrant whenNotPaused returns (uint256) {
         require(governanceToken.balanceOf(msg.sender) >= proposalThreshold, "Not enough tokens to propose");
 
-        _proposalIds.increment();
-        uint256 proposalId = _proposalIds.current();
-
+     
         uint256 startTime = block.timestamp + votingDelay;
         uint256 endTime = startTime + votingPeriod;
 
